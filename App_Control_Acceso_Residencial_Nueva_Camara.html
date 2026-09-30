@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control de Acceso Residencial</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#172033}
+header{background:#173b7a;color:white;padding:22px 18px}
+header h1{margin:0 0 5px;font-size:24px} header p{margin:0;opacity:.9}
+nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px;background:white;border-bottom:1px solid #dce2ec}
+nav button{border:0;border-radius:10px;padding:11px 15px;background:#e8eef8;color:#173b7a;font-weight:700}
+nav button.active{background:#173b7a;color:white}
+main{max-width:1050px;margin:auto;padding:18px}
+.panel{display:none}.panel.active{display:block}
+.card{background:white;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 4px 16px #17203312}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+label{font-size:13px;font-weight:700;display:block;margin-bottom:5px}
+input,select{width:100%;padding:11px;border:1px solid #cbd4e2;border-radius:9px;font-size:15px}
+button.primary{background:#173b7a;color:white;border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer}
+button.secondary{background:#e8eef8;color:#173b7a;border:0;border-radius:10px;padding:10px 14px;font-weight:700}
+.notice{padding:12px;border-radius:10px;background:#eef4ff;margin-top:12px}
+.qrbox{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.qrbox img{width:190px;height:190px;border:10px solid white;box-shadow:0 2px 12px #0002}
+.code{font-family:monospace;font-size:18px;font-weight:800}
+.result{padding:18px;border-radius:14px;margin-top:15px;font-size:18px;font-weight:800}
+.allow{background:#e4f7ea;color:#176b35}.deny{background:#fde8e8;color:#9d2020}
+.small{font-size:12px;color:#657083}
+table{width:100%;border-collapse:collapse;margin-top:10px} th,td{padding:9px;border-bottom:1px solid #e1e6ee;text-align:left;font-size:13px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.active-b{background:#e4f7ea;color:#176b35}.used-b{background:#e9edf3;color:#596579}
+.warn{background:#fff4d9;color:#7a5700;padding:10px;border-radius:9px}
+</style>
+</head>
+<body>
+<header>
+<h1>CONTROL DE ACCESO RESIDENCIAL</h1>
+<p>Prototipo académico — lógica proposicional P ∧ Q ∧ R</p>
+</header>
+<nav>
+<button class="active" onclick="showPanel('residentes',this)">1. Residente / Apartamento</button>
+<button onclick="showPanel('portería',this)">2. Portería</button>
+<button onclick="showPanel('historial',this)">3. Historial</button>
+</nav>
+<main>
+<section id="residentes" class="panel active">
+<div class="card">
+<h2>Registrar persona autorizada</h2>
+<p class="small">El residente registra a la persona que puede ingresar. El sistema asigna automáticamente un QR único.</p>
+<div class="grid">
+<div><label>Apartamento</label><input id="apto" placeholder="Ej. 504"></div>
+<div><label>Nombre de la persona autorizada</label><input id="nombre" placeholder="Nombre completo"></div>
+<div><label>Número de identificación</label><input id="idpersona" placeholder="Cédula / documento"></div>
+<div><label>Tipo de persona</label><select id="tipo"><option>Familiar</option><option>Empleado</option><option>Visitante</option><option>Proveedor</option></select></div>
+<div><label>Hora de llegada / inicio de vigencia</label><input id="inicio" type="datetime-local"></div>
+<div><label>Hora de vencimiento</label><input id="fin" type="datetime-local"></div>
+</div>
+<br><button class="primary" onclick="registrar()">GENERAR QR DE ACCESO</button>
+<div id="mensaje"></div>
+</div>
+<div class="card" id="qrGenerado" style="display:none">
+<h2>QR generado</h2>
+<div class="qrbox">
+<img id="qrimg" alt="Código QR de acceso">
+<div>
+<p><b>Persona:</b> <span id="outNombre"></span></p>
+<p><b>Apartamento:</b> <span id="outApto"></span></p>
+<p><b>Código único:</b> <span class="code" id="outCode"></span></p>
+<p><b>Vigencia:</b> <span id="outVigencia"></span></p>
+<p><span class="badge active-b">ACTIVO — UN SOLO USO</span></p>
+<p class="small">Este QR es la credencial de acceso. Después de un acceso permitido, queda marcado como usado y no puede volver a utilizarse.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section id="portería" class="panel">
+<div class="card">
+<h2>Panel de portería</h2>
+<p>Ingrese el código leído del QR. En una instalación real, este campo sería alimentado por el escáner.</p>
+<div class="grid">
+<div><label>Código QR</label><input id="scanCode" placeholder="Ej. RES-0001-QR0001">
+<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+<button type="button" class="primary" id="btnEscanearQR">📷 LEER CON CÁMARA</button>
+<button type="button" id="btnDetenerEscaner" style="display:none;">DETENER CÁMARA</button>
+</div>
+<div id="scannerStatus" class="small" style="margin-top:8px;">Pulsa “Leer con cámara” para escanear el QR que presenta la persona.</div>
+<video id="qrVideo" playsinline autoplay muted style="display:none;width:100%;max-width:420px;border-radius:14px;margin-top:10px;background:#111;"></video>
+<canvas id="qrCanvas" style="display:none;"></canvas>
+</div>
+<div><label>Identificación presentada</label><input id="scanId" placeholder="Número de identificación"></div>
+<div><label>¿La foto coincide con la persona?</label><select id="scanPhoto"><option value="true">Sí — coincide</option><option value="false">No — no coincide</option></select></div>
+</div>
+<br><button class="primary" onclick="validar()">VALIDAR ACCESO</button>
+<div id="resultado"></div>
+<div class="notice"><b>Regla:</b> Se permite el acceso ↔ P ∧ Q ∧ R. Todas las condiciones deben ser verdaderas.</div>
+</div>
+</section>
+
+<section id="historial" class="panel">
+<div class="card">
+<h2>Personas y códigos</h2>
+<div id="tablaPersonas"></div>
+</div>
+<div class="card">
+<h2>Historial de intentos</h2>
+<div id="tablaHistorial"></div>
+</div>
+</section>
+</main>
+<script>
+const QR_BANK = {"RES-0001-QR0001": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiUlEQVR4nO2ZMW6EMBREZ2KkLVkpB9ij2FfLzfBR9gCRcBnJaFLYJllSJA0Lge8C2ehJHlno82dM4fcRX/4AAUYZZZRRRu2dYh0dGBJZHiTJsKmuU1BekjQCQJ+hAU6SpEfq+bpOQaX6jeuNFzEAINltr+vIVLdYE/07V93RqDaWZy+kDkJab0ejllQvaWgvGQBIytvrOgEVSZJXgAFOAKbS5myt69BUqTkPwcJEoH+MGvaq/ggUQyIRSdbCkzogXifr79ek0Np4J0kZrclXW0rSsFf1B6EmIrIDQ/FW1t8/i/qytGX4O2l9zrOoPoMhXQSkixjgqrkNG+s6MjWXFTd3NhOFBCjSiVvpOgNVzr718S4j3nJH9B+EH1+303Ui6luOCSdprAZra12noOYcU/ca4iPe7F+7KvUjx/RDhuJNoB+mZnj3qv5/U8uzR7yOoB+nTkivdneyJlV9ba33roSZdVbMrfnatag5UwAAOMGP7brQW6awLrXMMQXkeeas5hhllFFGHYX6BP/tx3Pr9gFLAAAAAElFTkSuQmCC", "RES-0002-QR0002": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABjUlEQVR4nO3aQY6bQBCF4f8FpCyxNAfgKPQNcqRobkYfJTeglyNhvSxojz2OomSDwabYtf1JPLWsdlWBzL+v/O0/EIQKFSpUqL0r1atFibOUyuWTtGmuQ6jBtj0BlO8GGtu2v6rH5zqEKvU37vf+QwBIarfP9cqqvVsLWkxZ746h/qY8dvNj7xiqsz0CDBMoAbbne/X4XAdQWZJ0AqXlv/a8lDlb53pptZz3N4OFfELQfR017DX9KyilIpEl1ZOmtJBP56jv11QsdbwnYPBMLfI72/Zcvx33mv65FbWF6nxzyni8LGPvV1Rc29drYWNPdRl7v7qyp8ZKpQU6W4nGStRqc+/pn1Vd+tpuxmBE0dLXOquxtsp1HHWdYy69lfoP6ee0ea5DqOscM/e2PTVLg7V1rkOozzmmf7UoFcnvfcwUVlV/zDGHcca5n1sN0/nS8O41/XOr+70nnybqtpe3eHaypvqscwwUcK1z3kz+EWfOquqmtwKa+rhwpHEdMURvtZpSvBsVKlSoUIdQvwH2aNA/BnOuhQAAAABJRU5ErkJggg==", "RES-0003-QR0003": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABlklEQVR4nO2ZQY6cMBBFX8WWsgSpD9BHMTfImXIzfCO8HMnoZ4GZdDOLZMNA0+UVmCfxVSpK3x8T/175x39A4JRTTjnl1NkpaytiZhEo685wqK63oJIkaQKSKjYQJEl6pr5f11tQpfW4fvdtp30BB+u6MhU39wa27xudWte29qL0iLLfG53aUp2kESD3YAMgqR6v68pU6/u8DJqApelWDeanyXNW9a9NLbV/CBby/cOge44azqr+CpQNxYxsZovRpETI/ez+fk+KxcePXUVjJ0FXWca/VNenZ1V/CSpNQUu3UyIacX+/P/XQ9+1wq4o0NZ/jff8NVPkpjSVi1gfZQJANNLd5fvWvSbWxkgRt1DNHUUDZguwoXe9ALbVfzXyopHHG6D6MNN2O0/VG1N8cM/dB0hTEwwHr5OpfnPrMMccSaXb/7pnCrtTXHLObUL7XSBrn9cB7VvWvTW1rDyVWS9OMKDf/d7Intda+E1CWDNmWsudfPnN2pb7kmJ8xmqVpjj5zdqS2OWa76iqC4DPHKaeccuoq1B9J8LkIVKAg1gAAAABJRU5ErkJggg==", "RES-0004-QR0004": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiElEQVR4nO3aTWrDMBAF4PcqQ5cy5AA5inSDnqlH6g2so/QG1jIg87qQ3fyU0m4cOfF4YYjygR9jY2aUUPj7SC//QIApU6ZMmdq64nx0qKeYl5XYNNcuVJAkjed1J0nStbp/rl2oPD/j5xtAsmuf65lVd/OZ8CcKeb0rmvpNabj3FU15qZY9fHZgBCCptM+1A5VIkj3ACCcAU21zWud6alXf9xcbC6kHAX+91bDV9M+gGDOJRHLuc3IHpH6y/n5NhdrHDwDqS7/W3kuSyvLtVtM/tsLlCIW5z9Hg5zWr/Ypqrm69AV4CfKkDlj33d1KpR20vATgx1hPA2DbXU6t5rg0jIKAA4YMQMqBEJ7bKtQdVa7/08a4AvnSEPxFhPLTLtSN1sY+ZXyWN84DVOtcu1Pc+5uALGDOp96PtKayqfuxjho9DUToKCOO0DLxbTf/Y6rb2SL0Dwzh1Qj7YbydrqqX2XgAyIGCiEp2Q3uyds6q6nmudEEanOtcGm63WVbT/RpkyZcrULtQXfW7KXsRpQx0AAAAASUVORK5CYII=", "RES-0005-QR0005": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABkklEQVR4nO3ZQY6jMBCF4b/GlnpJpD4AR4EbzJnmZvgouQFetmT0ZoHpSehFz4aGQLEi1iflyUJFuTDx/ZV+/QcCV65cuXJ1dGX1iljPZJCXlX7XXJdQnSRpBNItyHqCJEnP6udzXULl+oxLdzMAzCzun+vMKq5+G01Zrx03/Wur9T6LHBF5u390tVaNpAEgtQXrAUll/1xnVvW5T3OND1h3f5PBZPvmuoKa9/5hsJDaD4PmedRw1PRnUNZnM5KZSfcI5AjpNnl/v6VC9SpLgW8Kc/mva5KGo6Y/h8oRkr1JQ45owPv7n1LWEwTNh9GNQHc38z5na/VZc5aZAo1ENwbRqdRhg9ecTdTT2aoR1g1TFBmULMj2ynUFNe/90syHAvmG1erzvl+uC6l/c0wIksYgHg5YB0//4upzjvmnLdR2v/V37abq6xyTWJRaAUzLgfeo6V9bfZ0XNyPWjVMU+d2/nWyplr1vBGQQTFHJgki/veZsqnj8NEhQfetKc3/vM4UN1XqO+XQXvOa4cuXK1VnUX9tayVwg1EraAAAAAElFTkSuQmCC", "RES-0006-QR0006": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABg0lEQVR4nO2YTW6DMBCFvylILJ0b5CjmBj1TboaPkhvAMhLodWEgJarULhrMj2dhCfuTeLLHj2FM/B7h4w8QZCpTmcpUprZO2RglVgPQTTN1Ul2noLwkqQXdrAQoJElaUuvrOgXVjTlutXsYAGbxFNLqOhMl3WfjWeeNmcrU+tRkK05AB4br49z3n66tqj8EFczM7AL4eyVgiGVOal2Hpl5zXNAzXoOUus5DWd2VQGdGuIAaBoNu/upuW/1eKWId37gevMZBjeuJ5X5c3ar6fVPRcwwHCjYO5tsBwudsPFtVv29q8vuukvlpr6cDSKjrDNTCc1qQFL+1UuOk7DlvpNAy4rbHaIu89++nnn1MfAsEKzG79ql1HZuKeT/1MQupodCz4okLOe/fSk19zGj6N6tEsCr3kFelwrUHr4eNlf5WdB2QKl+eDaYmTjDAN2l0nYlykhogVpZzeZlc15GpMe9DTPYC8+1QghsWF2Kr6vdN/dDHLLScSqIrU5nKVKYy9b/UF1Rv0gR3MlNZAAAAAElFTkSuQmCC", "RES-0007-QR0007": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABj0lEQVR4nO2ZQW6kMBBFX8VIWRqpD9BHMVeeG+Ab4eVIRj8LTEZNFpnFMBCoWiAbnuQvA8WvwsT3kd/+AgKnnHLKKafOTlmLDrMebCjrmeFQXbegkiRpAmA2jQRJkl6p/6/rFlRpz7g0gQ2AmXXH67oy1W3mtvuKTq2x3XtRekTZb0WntlSUNC6jig2ApHq8rhtQ2cxWi/MuYF5sztG6Lk0tOeelsTAbxNdWw1nVX4GyoZiRzUxjrEDpIPez+/s9qc9vbagQJ6D0kJ8V0jSvL8RZ1V+Cys8KFDOIFY24v9+fopWvUSJJIk2twJJUl6saz6r+CpTGNd8DQTYsh1bhnl39T6VaWkmrr7HcY6KAsgXZUbruQC17v/r4UNs0/jbS9DhO142oP33MNAVJU1gKrKN13YL67GOOsdLs/tN7CrtSX/qY6dejKj9rJ3B/vyu13XtyH7A0zUB5+L+TPanm71u+D9K41FZBGqPk/n5Haq2tlggC1m9t8tpqX2rbx2yjWFG7Fcfocsopp5xy6t9SH3j7wj3f2RCcAAAAAElFTkSuQmCC", "RES-0008-QR0008": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABf0lEQVR4nO2ZS26EMBBEXwekWZob5Cj4arkZHCgS3oMqCxtmJrPIbPgE2gvLsp7kktXqbpdN/D36jzcgcMopp5xy6uiUlVHnFaR5J+6q6xJUK0kaAMIIUEmS9Extr+sSVFpiPN1kETCzen9dV6LUMZm6DU90ah4Ww4jFDU+8LjWnlSAggUg3ldWeui5E9WZm1oBFwCKTlY5nX12npnLc32NcJeSfrYajqj8DZUugmzWT0TdgMXl/vwGlr6aSuiCpCyMWk9nc6e+p69zUXGuTARgi1UD4rumb7zn1HFX9/6by3RssKT4MGKlGfbz5u3YDqtVYTJ2SbiTPOWtT6HmUa89+zliMnu6o6s9A3X1M2mGyUnCpPOesSeW4n33MSrRDlR3NMnncr04tvXz/WTzk0uTvrOvMVP2ykwzabsSgmovtUdWfi1IXRuizdT/5u3ZN6rePmf9OCAMiNf62WpPi8WuQKlfd3Nq3g9faValXH7NMetw+qnqnnHLKKafepX4ArEC2geB/cGQAAAAASUVORK5CYII=", "RES-0009-QR0009": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiklEQVR4nO2ZTW6DMBCF36stZUmkHICj2DfomXozfBRugJeVQK8LO2nCpt3wExgvwKBP8tNoNHozpvD3Sh//gACjjDLKKKP2TrEuD8ZMlgdJMm6q6xRUkCQNANLVCYCTJOmVWl/XKahcc1waJqoDQNJvr+tMFGMzgnHFE89L+dm3EgEhL3eiUXOqkdSVXc17SeP2uo5M1bxPBAA4MPQXEZi4ra4zUCX2z4OF5ptA8zpq2Kv6I1CMmUQiqS57ANkD6TqZv1+SguoaS4FX14wo5b/+k9TtVf0xqHwREi9C6D3M369ClcxGUM12hAGQhupzLO9XoLIHQk/qq5UY4cQIgHFjXUemHj5H5U2ApbdSohO30nUGqsT+bubdWD+bbyIMt+10nYj6nWMWizM44anB2rn6N6cec8wOD7vf2kxhUWo+S2Po/ajUCgzddG9496r+val57JHaEQwDIOSb3Z0sSd1j3wgo7iayZnv6tJqzKIXnq0G8XBcG662WpeZzzJeds5pjlFFGGXUU6gc3l8d+osHuegAAAABJRU5ErkJggg==", "RES-0010-QR0010": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABg0lEQVR4nO2YTW7EIAyFnxukWZIbzFHgyr1BOMocoFJYViJ6XUB+2izaRTNkgllYYH1SnizjGAvx+wpvf4AApZRSSimlzk5JWWZ2x9njq+pqgnIkyREQj0nEoyNJ8jv1fF1NULHkOIdYkn97Dc6u/jJUt287T6Hr8pT4Z3+xXWouK5YAIsBwT9mzzf6zqn9tqsQ+CACgg7iHSQAmqaurBSrHfs1xIk5SrkFNXS1QyK2kG7tsOKw+przjcFb1r02ZzT7cP4WwYz4xSKf9/ZFUyWwyLZ6OgC0+zfvjqdAjP27hRoB8GIj09XVdmpozGwA5AoBdS73m/aHUUnO4GeBwsAnrX1djfwyF7cgsT9BSuQHa5xxMLf0kSY4dOdiEXHhK9dHYH0XNPWbsAfcOiBsnEFGyqaarBcr8ODP0HwBsMgKbDGvpapESH28UHw3gHjeKP4muK1L7OaafhOHO/MytpqsFajfHhB3zMFPc40appasFaj/HzCYtpo4upZRSSiml/pf6AmX58IcozBSyAAAAAElFTkSuQmCC", "RES-0011-QR0011": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABjUlEQVR4nO2ZQW6DMBBF/6+RsgSpB+Ao+Gq9mX2U3AAvIxn9LmyrSTbtogQCMws0gifxNYxG4w+F3yN+/AECjDLKKKOM2jvFGh3IYSGQ2h2/qa5TUJMkaQYwXS8C4CRJeqRer+sUVKo9rtDfSkay217XmSj61P1O/ecbz0s9F1pxAIS03huNeqZ6SaFkGfQAJOXtdR2Zqn0fCQBw4HS9iMDCbXWdgSq1vzMW4ngj0D9aDXtVfwSKPpGIJOvgSR0Qh8X2+zUp1DW+z2XJLxl6SVIuTxX2qv69qVr7aQakGVAAoNDXY5XVfkWqVlezk0Kf6wcoF+v7l1BxzKhTfpTo4UQPgH5bXYemWt+3aNPHSQFOxeixvl+FKjtmW+ZdRhwAor8R0/y5na4TUT8+ZrEwZyfcHbB2rv7NqTsfM4M+kfoazVNYlXr20jhduywgd5jmpR1496r+YFQcM+jhBKSL/Tt5BdV8TAUsVEhk3Ts31nVkqnkKJdpSWbZNO1utSz37mA+Zs5ljlFFGGXUU6htFLewSGXwF6gAAAABJRU5ErkJggg==", "RES-0012-QR0012": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABh0lEQVR4nO2aQWrkMBREX0WGXrohB8hR7BvMmXIz6yhzA2kZsKlZSJ10QiCzcduxpYVA+IEL8Snqf1vm5xWf/gOCRjWqUY1q1N4p1dWhMUtlkySNm+o6BTXYthMQX2xPBNu2P1OP13UKKtcat9MiACR12+s6E6Xx0W88L9V9OX8f9/eq/hhUb3sCiOrQCNiet9d1ZKrWfSweH9CQnmdBNf3NdJ2BKnd/7zT9m6D/7D17VX8ESmOWiJL8egXIHcTr0vL9mhQ1xvczZRsSFPu35/LU017VH4HylC+2/15cj7R8vz5VK9spmMEznvoZO9Wc0+r+EdQiv5ZCD9ZYtvdWa/fqfyV1s5XeMBhEv3Qmg6OCtZWuM1Dl7m9hPsz12L+JIT1vp+tE1MccE0K1/7sGa+fqfzn1Psecch3iE1/aTGFV6ussTQCGuTMst4Z3r+oPRg0JNBIM+dK+naxJ3eeckm6uyOQrjn+a56xK3WYKZQUzpFC+GZZWq/VW61Fq/0Y1qlGNatQpqH8v2bnujBNAtAAAAABJRU5ErkJggg==", "RES-0013-QR0013": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiUlEQVR4nO3ZQW6cQBSE4b8Mkpcg5QA+ClzNR8oN6KPkBvTSEqiyoJmxx4tkEQYCr1cM80mUmlbr9UPmzyO9/AWCUKFChQp1dKUyatQzS31e7/S75rqE6mzbI5Ba8EBl2/ZX9fxcl1C5rHEPuV7uSKr3z3UlpZ7K6p/4xFDr8MAsD098YqjGLjPeTKgHbE/75zqzKlt6EgAV6n69WjBr31xXUMvcf2ospLcPQfO11XDU9GdQ6rNEklTqnFxDaueo77dULHW8x8rLpu8RypWn8u9w1PRnUFIL62oHD0R9v71aVjadp/Vw6wl7LHVOrPsnqHWXl9rKuh2w1O+c68zqVucYYILupzAZnFRZe+W6glrmfi3mq4nUgmg+RDf+2C/XhdS9j9ndy577Aevg6f9zdetjvqtGfZb8/hY9hU1V/fBbncv2r26c1wPvUdOfTKX14xXk1/h2sqVa131jIINhlsktTrHnbKu+9TGhMlBN6sa5jj1nQ/XYxyxXzYTLW9gnV6hQoUKF+rfqN8jstvZF7E1TAAAAAElFTkSuQmCC", "RES-0014-QR0014": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABlElEQVR4nO2YQWrsMBBEX8WGLDWQA+Qo9g3+mf6RcgPrKDlAwFoGNFQWkifDbJLNjB1bvWgj/ECFaLWkkvk54tMvIGhUoxrVqEZtnVKNHo1JKkmSNK6qa99UXz7DBJBeMBhBlwHQWrqORKWlxqN6PAGS+vV1HYnSuKRHzdioSwzOD57xsNTSVoKBBJBOmATXj66tqt8FFSVJJwA6a+Rcrjlr69o1Ver+qsbj66fqNlhT13EojYDGVAvd/5dtoHFVXfumsG17ojMEu5y1w1x/MNj2tFX1f5talngGhrmzJ+A7tbW/I1X7fXzNvSGjYX7JlHdtmNfTdQRq8RTen12dhJAR4UNlL6yl6whU7feXALqSbOfWc+5PffuYEHJ53DY/50HUYNuewRPnetGcQr6hHq9r19RS2ukEwxsIehzF5QxYR9cRqP5m7Dh2uV520rl5CvekbtcewocMn3L8dzEWtqp+H1RweVaViKfOGmmewl2pWvexdJcOwbMFfTZpaTmbVf+3qVsf01fD0HpOoxrVqEbthvoC0MOmolb4ArIAAAAASUVORK5CYII=", "RES-0015-QR0015": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABhElEQVR4nO2ZQW6DMBBF3xSkLM2NzJV7A3KUHKASLCMZ/S5sk7RdtIsSSJhZIGE9ia/BfD6Did/r/PYHCJxyyimnnNo7ZaVaOHdg/VRX+k11HYKKkqQRiBczDTSSJH2lHq/rENRU9rhZV1byY7C1rmNRIWH9Q6/oVKl4Of2M/DvQ9YJUtZUgYAIIVxMT3N+Bvap/CepsZsXqp5OsZ84xZ2tdL03ZN4MxwvgD8pnCilQN9C3SxSzHHs85K1NLe5tkhA+DkFrL9s9cn4q9qn9uCpVKaKAR5AMQlcpH17BX9c9N5d4TR4CQ0JCXGxHH8nHrvV+HKvt+CAlpBGksbfd9vza1eE6pW9vvFr33q1D5XVtzfJMEV1Mx/bklDtvoOhC1zDHNuvKutX7yjLkqVds7dRDfAZhbAdwPFvaq/sWoeDmpDpIbn98/norjXH9ZPeiKR6Rqvs9+v/ytCuXUM+aKVPH7c046DQZN4s70N9J1BCr3/jbMXDouCGk7XU455ZRTTv0v9Qm3PNHb1XA+NwAAAABJRU5ErkJggg==", "RES-0016-QR0016": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABgElEQVR4nO2ZQW6DMBBF39SRunSkHqBHcY4OR+kN8DKSo9+FMSRtpWZDIGG8AvMkvobhY39M/D/6tzsgcMopp5xyauuUjeMA/REgt5nTqrp2QSVJ0gCQD9iJIEnSLfV4XbugcuvxpFJn6muwtq5dUf1c8QfdcbfUr0Knvxb8W1X/GlSU1AF2ymYASM19tq/+Oamx7/ta7wAQisHF1tW1B6rWfvYZkS8G8dZ5tqr+uSnqUjKpoI6g0X1iqRfq6Laq/rmpscRj2QukIWie89ovSLW+H2h9TxCpvgve94tSre+byVT3mY7qA/DaL0JNtl4gDQBxfgDN9L32i1DT3ioIEEa2uuyxcW4dXfuh5hxTXZwStHj2HPMB1JRj2imbmR3bV3dlXbugWo4pDaAum5G+PMdclPqZpRmEQho+CnBuwcJW1b8WNRoPAPndPWdJqvV9FJAB4tnUfxaM6DnmohTXvwYJdYdLGsZvra/vF6R+55j1pHCdZG5VvVNOOeWUU/dS3yCM6uFYkyqbAAAAAElFTkSuQmCC", "RES-0017-QR0017": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABkUlEQVR4nO3ZTW6rMBiF4fcUpAwdqQu4S8Fby5K6g7CU7gAPKxmdOzD0Npm0g/JzwZ4A4ZE4Ish8/pD5fvQvP0BQVVVVVVXV3pWm0aKYJEjzL3HTXKdQnW17AAi2Io1t249q/VyHVu20TVfo3sCk12wSCJq8Wa4zKukKiitesap5+M4o31e8YlXBLne8G6bn3nZ+VuvnOoHqJc3TTWNgLGXO1rkOrcq79qGxMArCY6thr+mPoEpV30vy7QqQWuivY63vl1RMZXzIQPi6ZzuXs77vNf0RlP1+MSSJbgDfAUnto1o/1zlUyGVxW6ab7l2qdc46SjG1+FYKm6b0FBT5XGXtO/3/qj7rnAydQYQPmQTu1Vhb5TqDKvd+ruOnBo4IH6IbXrfLdSL1r4/Z62J7mBZYW+c6hUpTr952RjFJvv2p79pFVft0LGiywdAN47zg3Wv6AypFRimmS/12sqSan/tgKNVNHOVe4L7OOcsqvn4apPHUThga09WewrLquY857YWMy1+xUa6qqqqqqqp+V/0FaYC0Zjhd9FwAAAAASUVORK5CYII=", "RES-0018-QR0018": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABlUlEQVR4nO2ZS26EMBBEX8dIszRSDpCjmJtFOVJuAEeZA0TCy0hGlYXN/KQo2czAgHtneJJr0fSnMPF3DC//gKBSlapUpSq1dspKNJi1k0Gcn3SL6toFFSRJI6jHCXCSJF1Tj9e1CyrOOR7GyQAws2Z5XVummpuz3f3GSv1Oecm6h964V2rOey8gAuHTEBEul661qt8ENZiZWQuAk3VMecxZWtemqZz3V8bCZOUzuM+NlTpFHiWDJMII4BPqAfDlhfq1qn9uaq738TVpeEuNiA0WxrbW+wdR6pkM4kHW+YQ+WnIPWFjXHijrvAT+22Dea8FLpfqsW/2zUqXXDu1XQzgexGAuGf7LSvlfSNceqNxrz5E7bPFzErXX3p06+5g5glL1cx5FnX1MHUuHVe/T4ro2TZ1mzBbCJxg+NRoMCMeDbClde6TU42TvoxN5w12Jri1Stx4yREPwbRreTuvVWtU/N3XhKUijm4v+WOb7OufckSp5P+Tq4jC8MHCIePqRslb1z03d+pi6OPpacypVqUpVajPUD9h+u364o4DJAAAAAElFTkSuQmCC", "RES-0019-QR0019": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABjElEQVR4nO2ZQY6jMBBFX429NzcyN+urwVFygEiwHMno9wJDutMaTW+cQFJeWGA9yV/Wpwo+Jv4/xj+/gMApp5xyyqmjU1ZHxHoWg3lb6Z+q6y2oLEmaAOaI9QRJkr5Tj9f1FtS8e5wgDYCZxefremUq3t2LufGOTv2LMuuW/Ql4yI7vS22+TwJm0NiHsl49Vdc7UHxtqQSRpyDytK1kSRqOqv7c1Or7m8c1dgF9d/1x1Z+bqr7PKvU+q6AhqZrffd+Oqr4fuyuQJgzAwIBUtm5wVPXnptbTtXyJwBw396drZOyuW+k5qvpzU2vN0QBrpZGmsB64hu3j1mtOWypJ9nGJMHaLQZIglXvq8bpemaq+30c99tXyxXtte+qWY5IvZhpSwXqCZ2ktqf0dcy/1qSaadXLfN6duOeYcAYIYO6hrR1d/Tuo+xwQWg/TXBGFrtkdV/1rU7QcKsPh/q5bUfY4JhGKkayRPnX9btaR+5JhrmKkCefJe25T6kWPWKejr8lHVO+WUU0459VvqE5OU2UYqUobfAAAAAElFTkSuQmCC", "RES-0020-QR0020": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABfUlEQVR4nO2ZS26DQBBEXwekLOEGOQq+QY6Uq8FROEAkWFoaVFnMjLHjRbLhZ3oWXthPcqndFOXCxN+ne/sHBE455ZRTTu2dsnRK6GqAMb9z2VTXKahGkjQAjCVAIUnSI7W+rlNQY97xZgC7APEy2FrXqaju42rrfqNT8ymeI/8udL0clW2lEjCCNX1a+/tfYK/qj02l2Xdx4AVAEQymB+PZq/pjU3H2844r+n316Dt7VX9sihglGwXURqsvpLYK8YN42r2qPzZ1G3FAUshJX5LaHPJ99stQee+HQjTDfBmkF5/9glTy+67GBMKovsts9lNJ026j6wxU9pwBUqdAkew/+ZDv/VLU/S11vutKAXC/X4Oae8wcdgCqq/eYK1C3HtOsnsysTmlza12noHKPKfUlakczqfcec1UqrXwlQXVrNLfXdQZKbRWwr94Mxnf3nCWp3z0mMJWCUNJ9hu10nYHi/tFgjvbxf61nzIWppx7zlm68v3fKKaeceiXqB3Ok9DPIPmrxAAAAAElFTkSuQmCC", "RES-0021-QR0021": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABh0lEQVR4nO2YS47bMBBEX48EZEkDcwAfhb5BrkwdxQcIIC0NMKgsSNoaz2Ky0cdW90qfB6hAtUrNMvFzDR//AYFTTjnllFN7p6xWD0xmdpnalcumug5BRUnSCAxnSYlOkqSv1Pq6DkFNrcfjtR7Vz2BjXYeihnNGac0nOtUqXn/JLms+8bBUs5UgYAIj3AyA+aZrr+rfghrMzOxE6Xvgbxlzttb11lTp+0ePazhh9TPYUtcRKMooGZVRohPQSSnkcqNU2qv616bqEicAwny0nx/tVf1rU/cRvssw9ZkosJjA4sN39qr+tanqOYRMMR6Ncx8qG17v+0WouefEsfp9fQtqpu9rvwg1/6WWbh8pyw7u92tQjxyzDTsA4eY55grUPcc0O9/M7NTcZ2Ndh6Bajqk09ShNZsSr55iLUv3TucXxM0MYAW6eKSxJPa+9hlOHxashpk/ZVrqOQD3nmBD+mCD3DL/zdrqOQLW9VamuzJgQVJMdnzGXo77lmPcTz++dcsopp96J+gcdA+sPzskt5AAAAABJRU5ErkJggg==", "RES-0022-QR0022": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiklEQVR4nO3aTWqlQBTF8f9JCRkqZAFvKeXOmiwpO7CW0gtosIaBktMDtfOSENKT9zRaDgTlBx7Ej3uvyny/pIf/QFBVVVVVVdXelZalQeomqc/rnn7TXKdQ0bY9AuRHeyDYtv1e3T/XKVRernHbBfWApGb7XEdWzYdtAZh8uyNW9ZXy0Jb7HrGq1vYAEEdQz/L02TzXCVSSJHWgPj8amOYyZ+tch1bz8/56sNC+Ctr3o4a9pj+CUp8lkiQ/dwC5gdRNtb6/pfpX54QC7Z9GcZwgXQrEcVpviL2m/9mKtYUKS28VR/DQLm3V3GENe01/BDWf9nSxoS0Qf0u1zrmPepviAMHq59VSbe49/U9VH+scwdSYDE4K1la5zqDmc7/W8aGQBKJ9FXF82i7XidTVHHN+64a5wdo61ynU2xxzXMp9P1/qu/am6tMcM76AUxdKre/vrlIH+uXCOtnZSa4DqvW6bw1kMEwy+anMze1Wuc6guP40SPA6TQ4mutS+9pZK9d+oqqqqqqpTqL/aGa/8fXX7OQAAAABJRU5ErkJggg==", "RES-0023-QR0023": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABlElEQVR4nO3ZQYrjMBCF4b9GgiwdyAFyFPtmYW5mHWVuYC0bZF4vJGcmoWFmMW47Tmllxx/4oQhRKpv4+0g//gGBK1euXLnau7I2IjbkCOTll2HTXG+heknSBKRrAQiSJD2q78/1Fiq3NS5Nc70ys7h9riOr+HRvq7/R1TKe517kMyKv90ZXz6qTNAKkM9gASCrb5zqyaus+1b0mYP10KQbzw+az1/SvrercPzQWZoPusdWw1/RHUDZkM5KZ6ee1ADlCOs9e36+paGV8J9UifwTq9i+V+lTjXtMfQUm/IpAjdptAI17fr6/auu/r4i912qWp1Tm+7r9BZTON+SS7SbKBIBto1eb+07+mutc5gl7A/WylZEG2Va53UHXul2I+FNK1RKP7MPrpsl2uN1K/+5jkk6QpiD8OWDtP/+Lq3sccuZf7V+8prKq+7GMqnUMB5uXAu9f0R1NdwW4q2JBP/u1kTbWs+05ABsEcRb4U33PWVktPoY4g6ufCKYjez1brquc+ZrvqCmp/xTa5XLly5crV/1Wf4DPFQsoVce8AAAAASUVORK5CYII=", "RES-0024-QR0024": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABjklEQVR4nO2aQWrDMBREZypDlg70AD6KfLOSm1lH6QEK0jKgMF1ITpqW0m4cOfbXzuaBhm9Jnvk2hb9HePkHBBhllFFGGbV2inV04AiAY5rvjE117YLykqQIIBwvBOAkSbqnHq9rF1Sqa1xTOkgTAJJde11bprpv10Qfl53RqN8oTbjwoTMa1aucNPDv9YUrKbfXtQMqkCSPAEc4AbgUm9Na16apct5/aSyE4Uygv281rFX9FiiOiUQgqSl1AFJX3CbHprq2Tc3rPrmMm8UJQwZ8vMwbYq3qn5tCiVA+ui+njKa+xqqSsKa1qn9uqtYefS7hFl4ZUqw+x2q/IFWrK2VogpMmuLoNvOrzsNovQ11zrRO8AKL/oJAABTqxla49UKX2s493GUgdiP5M+PjaTteOqFsf00cnKdaA1VrXLqhrH/M0ZHBMpE6D9RQWpX72MdFlhSPM3z+e8hHgmySO6WDfTpak5nXfCyjuZjhTgS6XcNtK1x6oOVuVUa19ybXestWyFO3fKKOMMsqoXVCfUn3PzYmJKscAAAAASUVORK5CYII=", "RES-0025-QR0025": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiElEQVR4nO2ZQW7DIBREZ4qlLLGUA+Qo5mY9U29gjpIDRDLLSljTBThNvGk3jh37s0CAn8ToC+H/Bwp/t/jxDwgwyiijjDJq6xRra8oISNNKWFXXIahOkjTURQY4SZKeqdfrOgSV6hlXP3Ukm/V1HYli8BLDC3c8LtXM5kIihLTcjkbNKS+pB4B4yWAAICmvr2vPVD33kQAAB3bXkwiMXFfXEagS+wdjIbYg4J+thq2q3wPFkEhEkuXiQWqA2I6W3y9JoeTxvZfQKaN08JKkPH3dqvr3pqbowpWurPW+llUW+wWpe+xrYlNHwzS12C9P+XwvZJ0YSgcwrKxrz1TNMbuh5joERgoJUKQT19J1BKrEfkrmXQb8rSH8N9EN5/V0HYj69TG760nS4ISHAmvj6t+c+vUxfUZN9y/mKSxKzb00dl/nrNgCAsap4N2q+r1RPoOfkhjSyd5OlqSmc+8FlOymvTWKdNnunKUpPD4Nwqn+dVUtBqutFqTmPubTyNmdY5RRRhm1F+oH4jDTwHF8YSYAAAAASUVORK5CYII=", "RES-0026-QR0026": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABhElEQVR4nO3aTWrDMBAF4PcqQZcy5AA5iny1Hqk3sI7SG0jLgM3rQjbECaHd+Cf2eBFs8oEfg1DG41D4+0gf/0CAKVOmTJnau+J4eLAtZP0gSbab5jqFipKkDAChBwAnSdJcrZ/rFKqMa1xd+awVJ+m3z3Vk5R+uOa775e5o6pVSh4HqVryjqSDViscMsAUgqX9U6+c6gUokyQZgW/f7obY5W+c6tKr7/d1gIV1vBMJ81LDX9EdQbAuJRE5bffFAagbr75dUqH18F3oAQULMqGeS+unbvaY/hioe6sq4wauD9ffLq3FlKwPqQl/LXi9t3a+kgoT44+sZWzixxdht7j/9e6rZc20QGPPghQIo0Ylb5TqDqrWf+njXA6UBEW5EzJftcp1I3c8xJSm7+oC1da5TqLs55jjE19fVZgqLquc5JhyUGtcz5mF64N1r+vdWj7VH/L6AUQOFcrF3J0uqqfZBAAog4EYlzif5e01/CPU0x3RCzPZbu6ii/TfKlClTpk6hfgEOXLC+Mh6JUQAAAABJRU5ErkJggg==", "RES-0027-QR0027": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABhUlEQVR4nO2ZTYqDQBCFvxobsjSQA+Qo7c2G3Mw+Sg4woEtBebOwnUkyAzMbfxKrFoLygY/y2VY/Tfxd6e0fEDjllFNOObV1ynIFoA1AO12pVtW1CypKkhognTuzikKSpHtqeV27oNrJ4/F6kGogvwYr69oVlX2/4B2dmipeDz9H/g3oekFqWlZKAS1YrDsD4PYJbFX9c1O592nsdwG0JxkMtq6uPVBj7789LugsvwZr6toPZRWDkSxgdiyky9F9vxiVLABlj2qA2BTK19bV9dIU4x6qBogNue1RUt5vSVK9VfXPTY3WtticetJZkI7YtNgPgVivo2sP1I3vpabQ5PseaTy47+ei0H2Ni77UA1Oo472fk/rOMUfzj1V2nmMuQH3lmFYxmNmxEFB4jrkENeWYulhAdWtGvPqMOSsVHs6NsgHKj5B3uCvp2iOlug3Y+/Ugq9qDrzlzUo85JjCY0rlH6dyvp2sPFLe/BsmjPfkz6zPmrNQvOWaebjy/d8opp5x6JeoTnKjJ1SIfYgYAAAAASUVORK5CYII=", "RES-0028-QR0028": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABiklEQVR4nO2YQY7DIAxFvwekLhupB+hR4Ga9WjhKbhCWkaj+LIB21C5mFpNCErNwEudJ+XKMAQvx+whff4AApZRSSimleqekDAuEARAfq8c31bVvyuaLGwEgXiCAgIgmAQCkla4jUbHkOEcYigeQp0FrXQej7vLpLx6Usi/P4uZLegt+r+q3TdXYnwkgAkQsnp+Hrl7V74IKIiIyAOKz4563Oa117ZrKef/McYbrImUatNR1HEp8tNkA0YIjAPHPVbdv9Vulat5HgMAidDXjGcTU+17Vb5sCSZYQu9kQODMbkim/5dir+m1TJfauxhmOJJn/gsb+I1Su9yKln3NehJw70LVnqmT2Y+QZMJ5TXnA171ekftZ7wDCHnTPwrEMa+1WpUuWLU+RKIgylq9a9+o1TtY8pt8mCnETgJj3Xrkq99tIIJIvgTUK4JstWuo5IiY8nym0G5DadtOasSb33MbEIw2CA3NlppOsI1Os+J59r3Wyq0X3OatRbH7OY9DBtdCmllFJKKfW/1DfJ6tWQOWE3DQAAAABJRU5ErkJggg==", "RES-0029-QR0029": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABgUlEQVR4nO2ZwW2EMBBF38TcQdoCUorpIDVtZ1BKCohkjpFAPwebTXYvycULgfEBGfMkfw2j4Xsw8fsYX/4AgVNOOeWUU3unrIwGs24xmNaVflNdp6CiJCkBMQEQJEm6p56v6xTUVHJcV2vyitk627/6Y1DWE2T9E3d0ah0aWEzDE3d0qpVyxGMC6wFJ8/a6TkCNZmbWlZoDLNnmbK3r0FT+nN41FhaD9r7VsFf1R6Csn8wYzUzXDmBqYOwW9/c1KbKNj/lyK/CtJGnOTzXsVf0xqJz3xdBrwP19fapktlKQhnamZHsCz/vaVKk5tBIxhfwWiCmUEhQ99tWoHz5HMGOAiQk0WpBtpesMVI796uPDXG7bTyOmy3a6TkR99zGzxUnlgLW1rlNQtz7mwM3uv3pPoSrVPNxbfG9mjR0Qh2U98O5V/f+mHmPP2AUsamnEdPF/JzWpNfatILubtw8TgNF6zalKrf4+jyC+fxdGP1vVpR77mHez4DXHKaeccuoo1BfWqswGXFiskwAAAABJRU5ErkJggg==", "RES-0030-QR0030": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABh0lEQVR4nO2aTWqEQBCFv0oLs+yBOcAcRW+Qs+YG9lHmBroUHF4W3c5fFsnG6Gg1CNp+4KMoylelJn5f6eMPEDjllFNOObV2ysqqMDuCNf200yyqaxdULUnqgPpSAQRJkp6p/9e1C6ovOa42DgaAmVXL69oTZXYMP23n8rq2SFUv10qNIfr5nujUKxUltflsxBpA0ri8ri1TJe9TrvEBqy8HGVxtWV17oHLsHyp8Og8G8bnmr1X9FihrejOSmUmXCugrSMer+/s5KVTWCLVGssknlr18r12r+vempth3cH/Xqo2lrfLYz0hN0Y0lx8teV3yOx352yhqmol93QdYQVPYW1bVt6u5z8mHpPJjoQcmCbClde6By7CczH0bqrwojDkbdnZbTtSPqPsdMZ0nqgnhosFau/s2p+xyTm90/+0xhVup1lmZE8ixNcJ0a3rWq3xhVd2BNHIH+4N9O5qSmvI+C4m5A9CeRPr3mzEo9dFRAUH7rtvE2YvDeajbK/N8op5xyyqldUN+Uzs9PZ6A4rgAAAABJRU5ErkJggg=="};
+const KEY='control_residencial_v4';
+let data=JSON.parse(localStorage.getItem(KEY)||'{"personas":[],"intentos":[],"next":1}');
+
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
+function showPanel(id,btn){
+ document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+ btn.classList.add('active'); render();
+}
+function registrar(){
+ const apto=document.getElementById('apto').value.trim();
+ const nombre=document.getElementById('nombre').value.trim();
+ const id=document.getElementById('idpersona').value.trim();
+ const tipo=document.getElementById('tipo').value;
+ const inicio=document.getElementById('inicio').value;
+ const fin=document.getElementById('fin').value;
+ const msg=document.getElementById('mensaje');
+ if(!apto||!nombre||!id||!inicio||!fin){msg.innerHTML='<div class="warn">Completa todos los campos.</div>';return;}
+ if(new Date(fin)<=new Date(inicio)){msg.innerHTML='<div class="warn">La hora de vencimiento debe ser posterior al inicio.</div>';return;}
+ const codes=Object.keys(QR_BANK);
+ const used=new Set(data.personas.map(p=>p.code));
+ const code=codes.find(c=>!used.has(c));
+ if(!code){msg.innerHTML='<div class="warn">Se agotó la demostración de códigos QR.</div>';return;}
+ const p={apto,nombre,id,tipo,inicio,fin,code,status:'ACTIVO',used:false,created:new Date().toISOString()};
+ data.personas.push(p); data.next++; save();
+ document.getElementById('qrGenerado').style.display='block';
+ document.getElementById('qrimg').src=QR_BANK[code];
+ document.getElementById('outNombre').textContent=nombre;
+ document.getElementById('outApto').textContent=apto;
+ document.getElementById('outCode').textContent=code;
+ document.getElementById('outVigencia').textContent=format(inicio)+' hasta '+format(fin);
+ msg.innerHTML='<div class="notice">QR creado correctamente y asociado al apartamento y a la persona autorizada.</div>';
+}
+function validar(){
+ const code=document.getElementById('scanCode').value.trim().toUpperCase();
+ const id=document.getElementById('scanId').value.trim();
+ const photo=document.getElementById('scanPhoto').value==='true';
+ const p=data.personas.find(x=>x.code===code);
+ let P=false,Q=photo,R=false, reason='';
+ if(p){
+   const now=new Date(), ini=new Date(p.inicio), fin=new Date(p.fin);
+   P=!p.used && now>=ini && now<=fin;
+   R=id===p.id;
+   if(p.used) reason='El código QR ya fue utilizado.';
+   else if(now<ini) reason='El código todavía no está vigente.';
+   else if(now>fin) reason='El código QR está vencido.';
+   else if(!photo) reason='La fotografía no coincide con la persona.';
+   else if(!R) reason='La identificación no coincide con la registrada.';
+ } else reason='Código QR no registrado.';
+ const allowed=P&&Q&&R;
+ const res=document.getElementById('resultado');
+ if(allowed){
+   p.used=true;p.status='USADO';
+   data.intentos.unshift({date:new Date().toISOString(),code,apto:p.apto,nombre:p.nombre,result:'PERMITIDO',detail:'P=V, Q=V, R=V'});
+   save();
+   res.innerHTML='<div class="result allow">✓ ACCESO PERMITIDO<br><span class="small">P=VERDADERO · Q=VERDADERO · R=VERDADERO · El QR queda usado.</span></div>';
+ }else{
+   const detail=`P=${P?'V':'F'} · Q=${Q?'V':'F'} · R=${R?'V':'F'}`;
+   data.intentos.unshift({date:new Date().toISOString(),code,apto:p?p.apto:'—',nombre:p?p.nombre:'—',result:'DENEGADO',detail});
+   save();
+   res.innerHTML='<div class="result deny">✕ ACCESO DENEGADO<br><span class="small">'+detail+(reason?' · '+reason:'')+'</span></div>';
+ }
+}
+function format(v){return new Date(v).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'});}
+function render(){
+ const t=document.getElementById('tablaPersonas');
+ t.innerHTML=data.personas.length?'<table><tr><th>Persona</th><th>Apto.</th><th>QR</th><th>Vigencia</th><th>Estado</th></tr>'+
+ data.personas.map(p=>`<tr><td>${esc(p.nombre)}</td><td>${esc(p.apto)}</td><td class="code">${p.code}</td><td>${format(p.inicio)}<br>${format(p.fin)}</td><td><span class="badge ${p.used?'used-b':'active-b'}">${p.used?'USADO':'ACTIVO'}</span></td></tr>`).join('')+'</table>':'<p class="small">Todavía no hay personas registradas.</p>';
+ const h=document.getElementById('tablaHistorial');
+ h.innerHTML=data.intentos.length?'<table><tr><th>Fecha</th><th>Persona</th><th>Apto.</th><th>Resultado</th><th>Lógica</th></tr>'+
+ data.intentos.map(x=>`<tr><td>${format(x.date)}</td><td>${esc(x.nombre)}</td><td>${esc(x.apto)}</td><td><b>${x.result}</b></td><td>${x.detail}</td></tr>`).join('')+'</table>':'<p class="small">No hay intentos registrados.</p>';
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+render();
+</script>
+
+<script>
+(function(){
+  const btn = document.getElementById('btnEscanearQR');
+  const stop = document.getElementById('btnDetenerEscaner');
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const status = document.getElementById('scannerStatus');
+  const codeInput = document.getElementById('scanCode');
+  let stream = null, timer = null;
+
+  async function stopScanner(){
+    if(timer) { clearInterval(timer); timer=null; }
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    video.style.display='none';
+    stop.style.display='none';
+    status.textContent='Cámara detenida. Puedes volver a escanear o escribir el código manualmente.';
+  }
+
+  async function startScanner(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      status.textContent='Este navegador no permite acceder a la cámara desde esta página. Usa el campo manual como alternativa.';
+      return;
+    }
+    if(!('BarcodeDetector' in window)){
+      status.textContent='Este navegador no tiene lector QR nativo disponible. Si la cámara no abre, usa el campo manual.';
+      return;
+    }
+    try{
+      const detector = new BarcodeDetector({formats:['qr_code']});
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:false});
+      video.srcObject = stream;
+      video.style.display='block';
+      stop.style.display='inline-block';
+      status.textContent='Apunta la cámara al QR. El código se leerá automáticamente.';
+      timer = setInterval(async ()=>{
+        if(video.readyState < 2) return;
+        try{
+          const codes = await detector.detect(video);
+          if(codes && codes.length){
+            const value = codes[0].rawValue || '';
+            if(value){
+              if(codeInput) codeInput.value = value;
+              status.textContent='QR leído correctamente. Ahora continúa con la validación de acceso.';
+              await stopScanner();
+            }
+          }
+        }catch(e){}
+      }, 300);
+    }catch(e){
+      status.textContent='No se pudo abrir la cámara. Verifica el permiso de cámara del navegador y vuelve a intentar.';
+    }
+  }
+
+  if(btn) btn.addEventListener('click', startScanner);
+  if(stop) stop.addEventListener('click', stopScanner);
+})();
+</script>
+
+</body>
+</html>
